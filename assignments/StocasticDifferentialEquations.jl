@@ -18,7 +18,7 @@ exited_bottom_boundary(exit_type::ExitType) = !exit_type.exited_top
 
 
 
-#=
+#= Wiener Paths
 The following define a Wiener Process Structure and a set of useful functions 
 for working with Weiner Paths
 =#
@@ -101,25 +101,56 @@ function spread_path(p::WienerPath)
     return WienerPath(arr, p.Δt/2)
 end
 
-function integrate(f::Function, wp::WienerProcess)
+function integrate(f::Function, wp::WienerPath )
     #=
-    This function integrates across the time domain, by computing the riemann sum
-    associated with the appropriate ito integral.
-        
-    There is an alternate formulation using dot products, but I had already written this.
-        
-    it returns a Float64 value for the integral
+        This function integrates across the time domain, by computing the riemann sum
+        associated with the appropriate ito integral.
+
+        One issue is that the functions it accepts are only of the type:
+            f(W\_t)
+        not
+            f(W\_t,t) or f(t)
+        I'm currently thinking of how to address this. 
+        I need to distinguish between f(W) vw f(t) vs F(W,t) 
+        One thought is to require a type signature f(w,t) -> R,t_new 
+        and create a TypeUnion, SummedTime which will capture two states for time:
+         - iterated time (a float value): which represents elapsed time (t-1)
+         - Nil(): which represents that time is not required.
+        The function implementor will then be required to return the calculated value
+        I can iterate the time an pass it each time, whether or not it gets used.
+        I'll probably want to implement a try/catch for functions that are passed with improper signatures.
+            - I can write functions that wrap cases f(w) or f(t) for ease of use.
+            - or I can just leave it as a reminder 
+
+        Note that there is an alternate formulation using dot products, but I had already written this, 
+        and my limited timing test suggested it was faster.
+
+        it returns a Float64 value for the integral
     =#
         
-    sum = 0
+    sum = 0.0
+    time_tracker = 0.0
+    
     steps = get_steps(wp)
     
     for i in 1:length(wp.path)-1
-        sum += f(wp.path[i]) * (steps[i]) 
+        #Calculate the running sum
+        try
+            sum += f(wp.path[i], time_tracker) * (steps[i]) 
+        catch err
+            if isa(err, MethodError)
+                println("Method passed to integration has incorrect type signature")
+                throw(err)
+            else
+                throw(err)
+            end
+        end
+        #iterate time tracker
+        time_tracker += wp.Δt
     end
     
     return sum
 end
-    
+
 
 end #End of Module
