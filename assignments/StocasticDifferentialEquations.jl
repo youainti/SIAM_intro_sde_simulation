@@ -1,6 +1,17 @@
 
 #This is a module with useful functions for working with stochastic processes
-module StochasticDifferentialEquations
+module SDE
+using LinearAlgebra, Statistics, Random
+
+export WienerPath, integrate, refine, spread_path
+#=
+Information on importing data can be found here.
+https://stackoverflow.com/questions/37200025/how-to-import-custom-module-in-julia
+
+in effect just do
+include("StocasticDifferentialEquations.jl")
+using .StochasticDifferentialEquations
+=#
 
 #=
 Create a struct to capture the type of exit from a 1d box, with a couple of helpful methods
@@ -10,11 +21,9 @@ struct ExitType1d
     exited_top::Bool
 end
 
-ExitType = Union[ExitType1d]
-
-measured_time(exit_type::ExitType) = exit_type.time
-exited_top_boundary(exit_type::ExitType) = exit_type.exited_top
-exited_bottom_boundary(exit_type::ExitType) = !exit_type.exited_top
+measured_time(exit_type::ExitType1d) = exit_type.time
+exited_top_boundary(exit_type::ExitType1d) = exit_type.exited_top
+exited_bottom_boundary(exit_type::ExitType1d) = !exit_type.exited_top
 
 
 
@@ -94,7 +103,7 @@ function spread_path(p::WienerPath)
     
     for ind in 1:len-1
         arr[2*ind-1] = p.path[ind]
-        arr[2*ind] =  (0.5 * (p.path[ind] + p.path[ind+1]) 
+        arr[2*ind] =  (0.5 * (p.path[ind] + p.path[ind+1])) 
     end
     arr[2*len-1] = p.path[len]
     
@@ -153,4 +162,52 @@ function integrate(f::Function, wp::WienerPath )
 end
 
 
+#=
+Thoughts on writing a stochastic process module:
+Start by working with just single differntial equation processes.
+A StochProc struct should contain
+ - Itself
+    - a function and underlying wiener path + process.
+ - What is needed to reconstruct it at higher resolutions.
+    - which is just itself and a refine function that will recreate itself with a refined wiener process
+Options are lazy and eagerly created:
+ - lazy is there is a function to generate the stoch proc
+    - recall, no member functions exist.
+    - requires setting a new conventional function to call.
+ - eager is that is that it's generation happens upon creation.
+    - this is probably the way to go.
+    - this will mean that in order to hang onto the stoch proc, you get the stoch proc and the underlying WP
+After further thought I realized that these are, in a way, different concepts
+A stochastic process contains the sets of functions etc that when composed and integrated, determine the final results.
+A stochastic path is a single realization of the stochastic process.
+So, a stochastic process should contain an ordered list of functions over which to integrate.
+It should also have a method to generate stochastic paths.
+A stochastic path should have the underlying functions and a wiener path that it is based on.
+it should also 
+=#
+
+
 end #End of Module
+
+#module SDETesting
+#=
+This module is designed to contain tests of sdes.
+=#
+#using .SDE
+
+# Testing constants
+#const N1 = 1_500_000
+#const N2 = 1_500
+#const T = 1
+
+#Example functions
+#f1(x,t) = x
+
+#Tests
+#function t1() 
+    #Check basic integral
+#    w = WienerPath(N1,T)
+#    @test integrate(f1,w) - 1/2*(w[N1]^2 - T) <= 1e2
+#end
+
+#end #end of module
