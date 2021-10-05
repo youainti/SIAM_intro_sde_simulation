@@ -185,7 +185,38 @@ It should also have a method to generate stochastic paths.
 A stochastic path should have the underlying functions and a wiener path that it is based on.
 it should also 
 =#
+#=
+stochastic process (lazy, it represents a generation procedure)
+ It should contain
+    bound and delta information
+    the functions that make it up
+Two important methods are 
+   walk_until(exit_fn) -> ExitCondition(stochastic_path, exit_info): which creates the stochastic integral, walking until an exit condition is met.
+   walk_for(n) -> stochastic_path
 
+stochastic path
+ it should contain
+    wiener_path it is built on
+    functions it is build out of
+    the array of current values.
+ important methods include
+    integration
+    cumulative integration
+    refine_path
+    spread_path
+
+There is also the question of whether or not to add a cumulative integration function.
+it would need to add integration to it's functions list.
+
+There is still a question of whether or not to build a stochastic path that doesn't have 
+some of the fundamentals such as the base wiener path. 
+This may be useful as a return type for some functions.
+I'm not sure what to call it.
+=#
+
+#=
+I also need to create a set of useful integrands.
+=#
 
 end #End of Module
 
