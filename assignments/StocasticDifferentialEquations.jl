@@ -3,7 +3,7 @@
 module SDE
 using LinearAlgebra, Statistics, Random
 
-export WienerPath, integrate, refine, spread_path
+export WienerPath, StochasticPath, integrate, cumulative_integrate, refine_path, spread_path
 #=
 Information on importing data can be found here.
 https://stackoverflow.com/questions/37200025/how-to-import-custom-module-in-julia
@@ -24,8 +24,8 @@ struct Exit1dBox <: ExitCondition
     time::Int
     exited_top::Bool
 end
-exited_top_boundary(exit_type::ExitType1d) = exit_type.exited_top
-exited_bottom_boundary(exit_type::ExitType1d) = !exit_type.exited_top
+exited_top_boundary(exit_type::Exit1dBox) = exit_type.exited_top
+exited_bottom_boundary(exit_type::Exit1dBox) = !exit_type.exited_top
 
 
 
@@ -33,16 +33,16 @@ exited_bottom_boundary(exit_type::ExitType1d) = !exit_type.exited_top
 The following define a Wiener Process Structure and a set of useful functions 
 for working with Weiner Paths
 =#
-struct WienerPath <: Path
+struct WienerPath
     # the two key things to know are the sampled points from the path and 
     # how far apart they are in the coordinate system
-    path::Vector{Float}
-    Δt::Float
+    path::Vector{Float64}
+    Δt::Float64
    
     #This overrides the default creation function.
     # It creates a wiener process using a given path, while 
     # enforcing the invariant that a WienerProcess starts at zero
-    WienerPath(p,d) = p[1] != 0.0 ? new(vcat(0.0,p),d) : new(p,d)
+    WienerPath(p::Vector{Float64},d::Float64) = p[1] != 0.0 ? new(vcat(0.0,p),d) : new(p,d)
 end
 
 # Generators
@@ -73,7 +73,7 @@ function get_steps(p::WienerPath)
     return steps
 end
 
-function refine(p::WienerPath)
+function refine_path(p::WienerPath)
     #=
     This refines the temporal resolution of the given WienerPath.
     
@@ -116,22 +116,6 @@ function integrate(f::Function, wp::WienerPath )
     #=
         This function integrates across the time domain, by computing the riemann sum
         associated with the appropriate ito integral.
-
-        One issue is that the functions it accepts are only of the type:
-            f(W\_t)
-        not
-            f(W\_t,t) or f(t)
-        I'm currently thinking of how to address this. 
-        I need to distinguish between f(W) vw f(t) vs F(W,t) 
-        One thought is to require a type signature f(w,t) -> R,t_new 
-        and create a TypeUnion, SummedTime which will capture two states for time:
-         - iterated time (a float value): which represents elapsed time (t-1)
-         - Nil(): which represents that time is not required.
-        The function implementor will then be required to return the calculated value
-        I can iterate the time an pass it each time, whether or not it gets used.
-        I'll probably want to implement a try/catch for functions that are passed with improper signatures.
-            - I can write functions that wrap cases f(w) or f(t) for ease of use.
-            - or I can just leave it as a reminder 
 
         Note that there is an alternate formulation using dot products, but I had already written this, 
         and my limited timing test suggested it was faster.
@@ -196,8 +180,8 @@ Two important methods are
    walk_until(exit_fn) -> ExitCondition(stochastic_path, exit_info): which creates the stochastic path by walking until an exit condition is met.
    walk_for(n) -> stochastic_path: which creates a stochastic path of length n
 =#
-struct StocasticProcess 
-    Δt::Float
+struct StochasticProcess 
+    Δt::Float64
     functions_list::Array{Function} #TODO: check later
 end
 
@@ -236,7 +220,7 @@ struct StochasticPath
     #These functions need to take in a path and then return a "path"
     # f(sp::StochasticPath) -> StochasticPath
     #See the cumulative_integration function for an example of what the new functions_list needs to look like.
-    path::Vector{Float}
+    path::Vector{Float64}
     
     #change the creation method to verify the length of the WP and path are the same.
 end
@@ -258,21 +242,22 @@ function cumulative_integrate(fn::Function, sp::StochasticPath)
         
     sum = 0.0
     time_tracker = 0.0
-    cum_integral = similar(sp.path)
+    cum_integral = zeros(length(sp.path)-1)
     
     steps = get_steps(sp.wiener_path)
     
-    for i in 1:length(wp.path)-1
+    for i in 1:length(sp.wiener_path.path)-1
         #Calculate the running sum
-        sum += fn(sp.path[i], sp.wiener_path[i], sp.wiener_path.Δt, time_tracker) 
+        sum += fn(sp.path[i], steps[i], sp.wiener_path.Δt, time_tracker) 
         cum_integral[i] = sum
         #iterate time tracker
-        time_tracker += wp.Δt
+        time_tracker += sp.wiener_path.Δt
     end
     
     return StochasticPath(
         sp.wiener_path
-        ,append!(sp.functions, x -> cumulative_integrate(fn,x))
+        ,append!(vec(copy(sp.functions_list)), vec([x -> cumulative_integrate(fn,x)]))
+        #Note^^: This adds a generic function to the array, i.e. unnamed when printed.
         ,cum_integral
     )
 end
@@ -292,11 +277,11 @@ function integrate(fn::Function, sp::StochasticPath)
     
     steps = get_steps(sp.wiener_path)
     
-    for i in 1:length(wp.path)-1
+    for i in 1:length(sp.wiener_path.path)-1
         #Calculate the running sum
-        sum += fn(sp.path[i], sp.wiener_path[i], sp.wiener_path.Δt, time_tracker) 
+        sum += fn(sp.path[i], steps[i], sp.wiener_path.Δt, time_tracker) 
         #iterate time tracker
-        time_tracker += wp.Δt
+        time_tracker += sp.wiener_path.Δt
     end
     
     return sum
@@ -305,9 +290,13 @@ end
 function refine_path(sp::StochasticPath)
     #=
     refines a stochastic path by refining the WP underling it and recalculating.
+    
+    #TODO: this needs some serious work. 
+    Each function should take a stochastic path object and return a stochastic path
+    I need to create some example functions
     =#
     wp = refine_path(sp.wiener_path)
-    path = similar(wp)
+    path = wp
     
     for fn in sp.functions_list
         path = fn(path)
@@ -342,6 +331,26 @@ I also need to create a set of useful integrands.
 =#
 
 end #End of Module
+
+module Examples
+using LinearAlgebra, Statistics, Random, .SDE
+
+export G
+
+
+f(x,t) = x*t
+g(x,t) = x
+h(xt,Δwₜ,Δt,t) = xt*Δt + (xt*t)*Δwₜ
+
+function G(sp::StochasticPath)
+    return g(sp.path,0)
+end
+
+function H(sp::StochasticPath)
+    return g(sp.path,0) #TODO: Finish this up somehow.
+end
+
+end
 
 #module SDETesting
 #=
