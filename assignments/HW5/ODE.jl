@@ -102,12 +102,12 @@ function adam_brashford_step(
         ,y2::Float64 #value at step 2
         ,y1::Float64 #value at step 1
         ,y0::Float64 #value at step 0
-        ,t::Float64 #initial time
+        ,t0::Float64 #initial time
     )
-    t1 = t - nb.Δt
-    t2 = t1 - nb.Δt
+    t1 = t0 + nb.Δt
+    t2 = t1 + nb.Δt
     
-    return y2 + ( 23*nb.a(y2,t) - 16*nb.a(y1,t1) + 5*nb.a(y0,t2))/12
+    return y2 + ( 23*nb.a(y2,t2) - 16*nb.a(y1,t1) + 5*nb.a(y0,t0))/12
 end
 
 function ab_method_with_local_errors(nb::ExtendedNumericalBase, x0::Float64, time_start::Float64, time_stop::Float64)
@@ -126,11 +126,20 @@ function ab_method_with_local_errors(nb::ExtendedNumericalBase, x0::Float64, tim
     t1 = time_start
     t2 = t1  + nb.Δt
     
+    #Prep the full estimation
     Z[2] = heuns_step(nb,Z[1],t1)
     Z[3] = heuns_step(nb,Z[2],t2)
     
-    t = 0.0
+    #prep the actual values
+    Y[2] = nb.f(t1)
+    Y[3] = nb.f(t2)
     
+    #Find the first few steps with local errors
+    X[2] = heuns_step(nb,Y[1],t1)
+    X[3] = heuns_step(nb,Y[2],t2)
+    
+    
+    t = 0.0
     for i in 4:iterations
         X[i] = adam_brashford_step(nb,Y[i-1],Y[i-2],Y[i-3],time_start)
         Y[i] = nb.f(t)
@@ -147,7 +156,20 @@ function richardson_extrapolation_of_euler(nb::NumericalBase, z0, start_time, en
     Yn = euler_method(nb,z0, start_time, end_time)
     Y2n = euler_method(nb2,z0, start_time, end_time)
     
-    return 2*Y2n - Yn
+    return [2*Y2n[2*n] - Yn[n] for n=1:length(Yn)]
+end
+
+function richardson_extrapolation_of_euler_with_local_error(nb::ExtendedNumericalBase, z0, start_time, end_time)
+    nb2 = ExtendedNumericalBase(nb.f, nb.a, nb.Δt/2)
+    
+    Xn,Yn,Zn = euler_method_with_local_errors(nb,z0, start_time, end_time)
+    X2n,Y2n,Z2n = euler_method_with_local_error(nb2,z0, start_time, end_time)
+    
+    X_r =  [2*X2n[2*n] - Xn[n] for n=1:length(Yn)]
+    Y_r =  [2*Y2n[2*n] - Yn[n] for n=1:length(Yn)]
+    Z_r =  [2*Z2n[2*n] - Zn[n] for n=1:length(Yn)]
+    
+    #how do I pull local errors out of this?
 end
 
 end #end module
