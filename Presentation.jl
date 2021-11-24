@@ -21,6 +21,7 @@ Writing the problem in differential form, we get:
  - Net present value depends on survival: $dv = r_t \cdot \lambda e^{-\lambda t} dt$
 
 
+
 ## Major questions
  1. What is the Expected Net Present Value $E(v)$?
  1. What is the distribution of net present values $v$?
@@ -44,6 +45,12 @@ Using standard Itô calculus, we get
 
 ### Expected Net Present Value
 Using the Feynman-Kac formula, we get
+
+note: are the discounting and survival interchangeable? 
+If not, the best we can do with the feynman-kac formula
+directly is put an upper bound on the expected net present value.
+I believe they are interchangeable i.e. discounted expected value vs expected discounted value.
+If so, then the suvival function is G and the feynman-kac formula solves directly.
 
 ### Distribution of Net Present Value
 Using the (FKE or BKE?), we get
