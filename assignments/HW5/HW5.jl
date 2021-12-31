@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.0
+# v0.17.4
 
 using Markdown
 using InteractiveUtils
@@ -39,8 +39,12 @@ Functions for managing significant digits
 end
 
 # ╔═╡ 2b12fc31-b479-42b3-a1de-8c90b8113294
-#the rounding level used in most problems
-sig4 = SignificantDigits(4)
+begin
+	#the rounding level used in most problems
+	sig4 = SignificantDigits(4)
+	sig5 = SignificantDigits(5)
+	mcl = MachineLevel()
+end
 
 # ╔═╡ 49b41f5e-89e0-4e22-88fe-358ceedcd4d1
 begin
@@ -68,6 +72,8 @@ end
 # ╔═╡ 6e0de80f-deee-4052-9969-1bf49960fc03
 md"""
 ## PC-Exercise 8.1.1 : Euler Method
+
+Using Machine level precision at two different levels of $\Delta t$.
 """
 
 # ╔═╡ b166ac96-d934-4a95-809b-b9236a5ab356
@@ -75,30 +81,30 @@ begin
 	#=
 	Euler Methods
 	=#
-	function euler_step(fb::NumericalBase,x0,t)
-	    return x0 + fb.Δt*fb.a(x0,t)
+	function euler_step(fb::NumericalBase,z0,t)
+	    return z0 + fb.Δt*fb.a(z0,t)
 	end
 	
-	function euler_method(nb::NumericalBase, x0::Float64, time_start::Float64, time_stop::Float64)
+	function euler_method(nb::NumericalBase, z0::Float64, time_start::Float64, time_stop::Float64)
 	    
 	    iterations = Int(ceil((time_stop-time_start)/nb.Δt))
 	    
-	    X = zeros(iterations) 
-	    X[1] = x0
+	    Z = zeros(iterations) 
+	    Z[1] = z0
 	    t = time_start
 	    
 	    for i in 2:iterations
 	        #println(i," ", iterations)
-	        X[i] = round(euler_step(nb,X[i-1],t), nb.sig)
+	        Z[i] = round(euler_step(nb,Z[i-1],t), nb.sig)
 	        t+= nb.Δt
 	    end
 	    
-	    return X
+	    return Z
 	end
 	
 function euler_method_with_local_errors(
 		nb::ExtendedNumericalBase
-		, x0::Float64
+		, z0::Float64
 		, time_start::Float64
 		, time_stop::Float64
 	)
@@ -110,9 +116,9 @@ function euler_method_with_local_errors(
 	    Z = zeros(iterations) #Full estimation
 	    
 	    
-	    X[1] = x0
-	    Y[1] = x0
-	    Z[1] = x0
+	    X[1] = z0
+	    Y[1] = z0
+	    Z[1] = z0
 	    
 	    t = time_start
 	    
@@ -130,27 +136,28 @@ end
 
 # ╔═╡ 760dcc6c-4656-45ab-a9b2-ae9a73a6e702
 begin
+	#model
 	a8_1_1(x,t) = -5x;
-	#do a calculation with the euler method here
-	nb8_1_1_a = FundamentalNumericalBase(a8_1_1,2^-3,sig4);
-	nb8_1_1_b = FundamentalNumericalBase(a8_1_1,2^-5,sig4);
+	#analytic solution
+	x8_1_1(t) = exp(-5t);
+	
+	#setup estimation parameters
+	nb8_1_1_a = FundamentalNumericalBase(a8_1_1,2^-3,mcl);
+	nb8_1_1_b = FundamentalNumericalBase(a8_1_1,2^-5,mcl);
 end
-
-# ╔═╡ 38c58f19-5b10-4995-b1dc-b2125511ef7d
-x8_1_1(t) = exp(-5t);
-
-# ╔═╡ 603f302a-4542-401f-95a7-f8035473fe82
-euler_step(nb8_1_1_b,1.0,0.0)
-
-# ╔═╡ 81f09350-abaf-4c1b-a088-9b0067653b1f
-euler_method(nb8_1_1_b, 1.0,0.0,1.0)
 
 # ╔═╡ d7619a16-e89b-4c73-bf62-153b0854b805
 begin
-	p = plot(0.0:nb8_1_1_b.Δt:0.99, [
-		[x8_1_1(t) for t=0.0:nb8_1_1_b.Δt:0.99]
-		,euler_method(nb8_1_1_b, 1.0,0.0,1.0)])
-	plot!(p,euler_method(nb8_1_1_a, 1.0,0.0,1.0),0.0:nb8_1_1_a.Δt:0.99)
+	p = plot(0.0:nb8_1_1_b.Δt:0.99
+		,[
+			[x8_1_1(t) for t=0.0:nb8_1_1_b.Δt:0.99]
+			,euler_method(nb8_1_1_b, 1.0,0.0,1.0)
+		]
+		,label = ["actual" "high resolution"]
+	)
+	plot!(p,euler_method(nb8_1_1_a, 1.0,0.0,1.0),0.0:nb8_1_1_a.Δt:0.99
+		,label = "low resolution"
+	)
 end
 
 # ╔═╡ 2d6437c2-9f34-4335-9f9b-59978ed94a1f
@@ -165,9 +172,9 @@ Plot the $\log_2$ of the errors against $\log_2 \Delta$ and determine the slope 
 begin
 	#8_1_2: make a list of numerical bases
 	deltas = [2.0^-i for i = 0:13]
-	bases = [ExtendedNumericalBase(x8_1_1,a8_1_1,delta,sig4) for  delta = deltas];
+	bases = [ExtendedNumericalBase(x8_1_1,a8_1_1,delta,sig5) for  delta = deltas];
 	
-	global_errors = zeros(14);
+	global_errors_812 = zeros(length(bases));
 end
 
 # ╔═╡ 6f7af5f7-5ca1-4221-a0e2-ee91bba52ce3
@@ -177,14 +184,19 @@ for (i,base) in enumerate(bases)
     x,y,z = euler_method_with_local_errors(base, 1.0, 0.0, 1.0)
     
     #issue
-    local_error = y-x
-    global_errors[i] = sum(y-x)
+    global_errors_812[i] = last(y)-last(z)
     
 end
 
+# ╔═╡ 66ada403-5e02-46db-9a26-9557056ea726
+global_errors_812a = log2.(abs.(global_errors_812))
+
+# ╔═╡ 983c2710-236e-4eae-b8c6-cf2957fc4f3e
+
+
 # ╔═╡ 7c568c35-4129-44d7-92f0-b38865e384b3
-plot(log2.(deltas)
-    ,[log2.(global_errors),log2.(deltas)]
+plot(log2.(deltas)[2:14]
+    ,[global_errors_812a[2:14],log2.(deltas)[2:14]]
     ,labels = ["Global Errors" "Delta Line"]
 	,legend=:topleft
 )
@@ -193,7 +205,15 @@ plot(log2.(deltas)
 md"""
 ## PC-Exercise 8.1.3
 Repeat PC-Exercise 8.1.2 using Heun's method. Compare results with eulers method.
+Use machine level precision.
 """
+
+# ╔═╡ b6d99bcb-9dc5-4156-ab2f-1c6854555b3c
+begin
+	bases_813 = [ExtendedNumericalBase(x8_1_1,a8_1_1,delta,mcl) for  delta = deltas];
+	
+	global_errors_813 = zeros(length(bases));
+end
 
 # ╔═╡ 3b34e92a-6ffa-4ab8-8821-dd233eb2c692
 begin
@@ -240,26 +260,39 @@ begin
 	#find the list of estimates.
 	
 	global_errors2 = zeros(14)
+	cumulative_local_errors_813 = zeros(14)
 	
-	
-	for (i,base) in enumerate(bases)
+	for (i,base) in enumerate(bases_813)
 	
 	    #Calculate method
 	    x,y,z = heuns_method_with_local_errors(base, 1.0, 0.0, 1.0)
 	    
-	    #Get final results
-	    local_error = x-y
-	    global_errors2[i] = sum(abs,x-y) #note the absolute values
-		#TODO: figure out what is going on here.
+    	global_errors_813[i] = last(y)-last(z)
+		cumulative_local_errors_813[i] = sum(x)
 	end
 end
 
+# ╔═╡ 3779a360-528c-47f2-b475-59352ec9cb5b
+global_errors_813a = log2.(abs.(global_errors_813))
+
+# ╔═╡ 3d69ca06-bfc4-45ce-b3ba-e5e4f308bc92
+-log2.(cumulative_local_errors_813)
+
 # ╔═╡ 206959df-f13d-4901-bf37-78dbbcb2a422
-plot(log2.(deltas)
-    ,[log2.(global_errors2),log2.(deltas)]
-    ,labels = ["Global Errors" "Delta Line"]
+plot(log2.(deltas)[2:14]
+    ,[
+		global_errors_813a[2:14]
+		,log2.(deltas)[2:14]
+		,-log2.(cumulative_local_errors_813)[2:14]
+	]
+    ,labels = ["Global Errors" "Delta Line" "cumulative local errors"]
 	,legend=:topleft
 )
+
+# ╔═╡ 260527a1-0979-41cb-9a10-6f21a9920703
+md"""
+I decided to throw in the cumulative local errors just to see how it differers
+"""
 
 # ╔═╡ 4ae88583-3fcf-4737-8505-cc0e444aa948
 md"""
@@ -512,14 +545,14 @@ end
 
 # ╔═╡ a0efd6fd-4dc6-4728-9275-9f421a2a3ca2
 begin
-	y = 0.1
+	step_y = 0.1
 	N8_4_1 = 300
 	rounding_errors = zeros(N8_4_1)
 	
 	for i in 2:N8_4_1
-	    yi = iter8_4_2(y)
+	    yi = iter8_4_2(step_y)
 	    rounding_errors[i] = round(yi,MachineLevel()) - round(yi, sig4)
-	    y = yi
+	    step_y = yi
 	end
 end
 
@@ -691,9 +724,9 @@ version = "1.0.8+0"
 
 [[Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
+git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
-version = "1.16.1+0"
+version = "1.16.1+1"
 
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -859,9 +892,9 @@ version = "0.21.0+0"
 
 [[Glib_jll]]
 deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE_jll", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "7bf67e9a481712b3dbe9cb3dac852dc4b1162e02"
+git-tree-sha1 = "a32d672ac2c967f3deb8a81d828afc739c838a06"
 uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
-version = "2.68.3+0"
+version = "2.68.3+2"
 
 [[Graphite2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -882,9 +915,9 @@ version = "0.9.16"
 
 [[HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
-git-tree-sha1 = "8a954fed8ac097d5be04921d595f741115c1b2ad"
+git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
-version = "2.8.1+0"
+version = "2.8.1+1"
 
 [[IniFile]]
 deps = ["Test"]
@@ -979,9 +1012,9 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [[Libffi_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "761a393aeccd6aa92ec3515e428c26bf99575b3b"
+git-tree-sha1 = "0b4a5d71f3e5200a7dff793393e09dfc2d874290"
 uuid = "e9f186c6-92d2-5b65-8a66-fee21dc1b490"
-version = "3.2.2+0"
+version = "3.2.2+1"
 
 [[Libgcrypt_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgpg_error_jll", "Pkg"]
@@ -1026,7 +1059,7 @@ uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
 [[LinearAlgebra]]
-deps = ["Libdl"]
+deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[LogExpFunctions]]
@@ -1088,6 +1121,10 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "7937eda4681660b4d6aeeecc2f7e1c81c8ee4e2f"
 uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
 version = "1.3.5+0"
+
+[[OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 
 [[OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1167,7 +1204,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[Random]]
-deps = ["Serialization"]
+deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[RecipesBase]]
@@ -1456,6 +1493,10 @@ git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
 uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
 version = "0.15.1+0"
 
+[[libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+
 [[libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
@@ -1509,18 +1550,21 @@ version = "0.9.1+5"
 # ╟─6e0de80f-deee-4052-9969-1bf49960fc03
 # ╠═b166ac96-d934-4a95-809b-b9236a5ab356
 # ╠═760dcc6c-4656-45ab-a9b2-ae9a73a6e702
-# ╠═38c58f19-5b10-4995-b1dc-b2125511ef7d
-# ╠═603f302a-4542-401f-95a7-f8035473fe82
-# ╠═81f09350-abaf-4c1b-a088-9b0067653b1f
 # ╠═d7619a16-e89b-4c73-bf62-153b0854b805
 # ╟─2d6437c2-9f34-4335-9f9b-59978ed94a1f
-# ╟─4e1e8635-2c50-47be-a598-0e53b7b83245
+# ╠═4e1e8635-2c50-47be-a598-0e53b7b83245
 # ╠═6f7af5f7-5ca1-4221-a0e2-ee91bba52ce3
+# ╠═66ada403-5e02-46db-9a26-9557056ea726
+# ╠═983c2710-236e-4eae-b8c6-cf2957fc4f3e
 # ╠═7c568c35-4129-44d7-92f0-b38865e384b3
 # ╟─d21ce1b4-c9ce-41ff-ba54-f0f3f1037250
+# ╠═b6d99bcb-9dc5-4156-ab2f-1c6854555b3c
 # ╠═3b34e92a-6ffa-4ab8-8821-dd233eb2c692
 # ╠═1da23c46-394c-4e15-ad93-8ea5b0fa66da
+# ╠═3779a360-528c-47f2-b475-59352ec9cb5b
+# ╠═3d69ca06-bfc4-45ce-b3ba-e5e4f308bc92
 # ╠═206959df-f13d-4901-bf37-78dbbcb2a422
+# ╠═260527a1-0979-41cb-9a10-6f21a9920703
 # ╠═4ae88583-3fcf-4737-8505-cc0e444aa948
 # ╠═4eb6000e-8f62-45ac-a1ab-e4ad16e3bc72
 # ╠═e0fef77e-8a9c-4f13-ae63-331aa952a29d
