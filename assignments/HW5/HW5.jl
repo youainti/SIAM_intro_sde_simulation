@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 93723e67-fc2f-4394-80f0-d8918c5823ad
-using LinearAlgebra, Plots,Statistics
+using LinearAlgebra, Plots,Statistics, ForwardDiff
 
 # ╔═╡ 05713008-3c40-11ec-2e26-9b6306549123
 begin
@@ -59,9 +59,9 @@ begin
 	end
 	
 	struct ExtendedNumericalBase <: NumericalBase
-	    f::Function
-	    a::Function
-	    Δt::Float64
+	    f::Function #known function
+	    a::Function #from differential equation
+	    Δt::Float64 #timestep
 	    sig::Significance #used for estimation precision
 	end
 	#Add some other construction methods.
@@ -298,6 +298,7 @@ I decided to throw in the cumulative local errors just to see how it differers
 md"""
 ## PC-Exercise 8.1.5 :Adams Brashford
 Repeat PC-Exercise 8.1.3 using the 3-step Adams-Bashford Method with the Heun method as its starting routine.
+This includes using machine level precision.
 """
 
 # ╔═╡ 4eb6000e-8f62-45ac-a1ab-e4ad16e3bc72
@@ -315,12 +316,12 @@ begin
 	    t1 = t0 + nb.Δt
 	    t2 = t1 + nb.Δt
 	
-	    return y2 + ( 23*nb.a(y2,t2) - 16*nb.a(y1,t1) + 5*nb.a(y0,t0))/12
+	    return y2 + nb.Δt * ( 23*nb.a(y2,t2) - 16*nb.a(y1,t1) + 5*nb.a(y0,t0))/12
 	end
 	
 	function ab_method_with_local_errors(
 			nb::ExtendedNumericalBase
-			, x0::Float64
+			, z0::Float64
 			, time_start::Float64
 			, time_stop::Float64
 		)
@@ -332,15 +333,15 @@ begin
 	    Z = zeros(iterations) #Full estimation
 	
 	
-	    X[1] = x0
-	    Y[1] = x0
-	    Z[1] = x0
+	    X[1] = z0
+	    Y[1] = z0
+	    Z[1] = z0
 	
 	    t1 = time_start
 	    t2 = t1  + nb.Δt
 	
 	    #Prep the full estimation
-	    Z[2] = round(heuns_step(nb,Z[1],t1), nb.sig)
+	    Z[2] = round(euler_step(nb,Z[1],t1), nb.sig)
 	    Z[3] = round(heuns_step(nb,Z[2],t2), nb.sig)
 	
 	    #prep the actual values
@@ -348,7 +349,7 @@ begin
 	    Y[3] = nb.f(t2)
 	
 	    #Find the first few steps with local errors
-	    X[2] = round(heuns_step(nb,Y[1],t1), nb.sig)
+	    X[2] = round(euler_step(nb,Y[1],t1), nb.sig)
 	    X[3] = round(heuns_step(nb,Y[2],t2), nb.sig)
 	
 		#get starting time
@@ -356,7 +357,7 @@ begin
 		#begin iterations
 	    for i in 4:iterations
 	        X[i] = round(adam_brashford_step(nb,Y[i-1],Y[i-2],Y[i-3],t), nb.sig)
-	        Y[i] = nb.f(t)
+	        Y[i] = round(nb.f(t), nb.sig)
 	        Z[i] = round(adam_brashford_step(nb,Z[i-1],Z[i-2],Z[i-3],t), nb.sig)
 	        t+= nb.Δt
 	    end
@@ -370,28 +371,23 @@ end
 # ╔═╡ e0fef77e-8a9c-4f13-ae63-331aa952a29d
 begin
 	#find the list of estimates.
-	global_errors3 = zeros(14)
+	global_errors_815 = zeros(14)
 	
-	for (i,base) in enumerate(bases)
+	for (i,base) in enumerate(bases_813)
 		if i<4
 			continue
 		end
 	    #Calculate method
-	    x,y,z = ab_method_with_local_errors(bases[i], 1.0, 0.0, 1.0)
+	    x,y,z = ab_method_with_local_errors(base, 1.0, 0.0, 1.0)
 	    
 	    #Get final results
-	    local_error = x-y
-	    global_errors3[i] = sum(abs,x-y) #There is some sort of issue here
-		#figure out what it is.
+    	global_errors_815[i] = last(y)-last(z)
 	end
 end
 
-# ╔═╡ 0c2b9c41-84e6-4575-a954-f05c9fb002d3
-global_errors3[4:14]
-
 # ╔═╡ 8436ab86-bc96-40bd-8939-5270b964b5a8
 plot(log2.(deltas[4:14])
-    ,[log2.(global_errors3[4:14]) log2.(deltas[4:14])]
+    ,[log2.(global_errors_815[4:14]) log2.(deltas[4:14])]
     ,labels = ["Global Errors" "Delta Line"]
 	,legend=:topleft
 )
@@ -413,32 +409,19 @@ begin
 	
 	function richardson_extrapolation_of_euler(nb::NumericalBase, z0, start_time, end_time)
 	    nb2 = FundamentalNumericalBase(nb.a,nb.Δt/2, nb.sig)
-	
-	    Yn = euler_method(nb,z0, start_time, end_time)
-	    Y2n = euler_method(nb2,z0, start_time, end_time)
-	
-	    return [2*Y2n[2*n] - Yn[n] for n=1:length(Yn)]
+
+		#solve the low resolution euler method
+		Y1 = euler_method(nb,z0, start_time, end_time)
+		#solve the higher resolution euler method
+		Y2 = euler_method(nb2,z0, start_time, end_time)
+
+		#get the needed terms
+		Z = [2*Y2[2*itt] - yn for (itt,yn) in enumerate(Y1)]
+
+		return (Richardson=Z, LowEuler=Y1, HighEuler=Y2)
 	end
-	
-	function richardson_extrapolation_of_euler_with_local_error(
-			nb::ExtendedNumericalBase
-			, z0
-			, start_time
-			, end_time
-		)
-	    nb2 = ExtendedNumericalBase(nb.f, nb.a, nb.Δt/2, nb.sig)
-	
-	    Xn,Yn,Zn = euler_method_with_local_errors(nb,z0, start_time, end_time)
-	    X2n,Y2n,Z2n = euler_method_with_local_errors(nb2,z0, start_time, end_time)
-	
-	    X_r =  [2*X2n[2*n] - Xn[n] for n=1:length(Yn)]
-	    Y_r =  [2*Y2n[2*n] - Yn[n] for n=1:length(Yn)]
-	    Z_r =  [2*Z2n[2*n] - Zn[n] for n=1:length(Yn)]
-	
-	    #how do I pull local errors out of this?
-	end
-	
-	
+
+
 end
 
 # ╔═╡ 58593717-bdbd-47a0-83c1-ee0f79802e7e
@@ -447,60 +430,48 @@ begin
 	f8_1_7(t) = exp(-t);
 	a8_1_7(x,t) = -x;
 	
-	exact_solutions = [f8_1_7.(0:(2.0^(-n)):1) for n=3:10];
+	exact_solutions_817 = [f8_1_7.(0:(2.0^(-n)):1) for n=3:10];
 	
 	time_steps = [(2.0^(-n)) for n=3:10];
 	
-	numerical_bases = [ExtendedNumericalBase(f8_1_7,a8_1_7,2.0^(-n),sig4) for n=3:10];
-
-	global_errors_euler = zeros(8)
-	global_errors_richardson = zeros(8)
-
-	numerical_bases
+	bases_817 = [ExtendedNumericalBase(f8_1_7,a8_1_7,2.0^(-n),mcl) for n=3:10];
 end
 
 # ╔═╡ d0271b52-fcd7-4fa2-a7bd-7228fa169857
-for (i,base) in enumerate(numerical_bases)
-
-    #Calculate method
-    x,y,z = euler_method_with_local_errors(base, 1.0, 0.0, 1.0)
-    
-    #issue
-    local_error = y-x
-    global_errors_euler[i] = sum(y-x)
+begin
+	global_errors_817 = (
+		Richardson = zeros(length(bases_817))
+		, LowEuler = zeros(length(bases_817))
+		, HighEuler = zeros(length(bases_817))
+	)
+	
+	for (i,base) in enumerate(bases_817)
+	
+	    #Calculate method
+	    zyy = richardson_extrapolation_of_euler(base, 1.0, 0.0, 1.0)
+	    
+	    Z = last(zyy.Richardson)
+		Xl = last(zyy.LowEuler)
+		Xh = last(zyy.HighEuler)
+		Y = last(exact_solutions_817[i])
+	
+		global_errors_817.Richardson[i] = Y-Z
+		global_errors_817.LowEuler[i] = Y-Xl
+		global_errors_817.HighEuler[i] = Y-Xh
+	end
 end
-
-# ╔═╡ 8df5b4cf-0c79-45c4-a42c-63fa63d31df0
-global_errors_euler
-
-# ╔═╡ 93b452b6-f800-4a73-9bab-4b861bcad181
-for (i,base) in enumerate(numerical_bases)
-
-    #Calculate method
-    x,y,z = richardson_extrapolation_of_euler_with_local_error(base, 1.0, 0.0, 1.0)
-    
-    #issue
-    local_error = y-x
-    global_errors_richardson[i] = sum(abs,x-y)
-end
-
-# ╔═╡ 6a5d536b-a549-4a51-8297-50e5f7ca385e
-
 
 # ╔═╡ 9bbdabec-0444-4e0f-8f51-f1669a9e661b
 #plot the errors
 plot(log2.(time_steps)
-    ,[log2.(time_steps) log2.(global_errors_euler) log2.(global_errors_richardson)]
-    ,labels = ["Δt" "Euler method" "Richardson"]
+    ,[log2.(time_steps) log2.(abs.(global_errors_817.Richardson)) log2.(abs.(global_errors_817.LowEuler)) log2.(abs.(global_errors_817.HighEuler)) ]
+    ,labels = ["Δt" "Richardson" "Low resolution Euler" "high resolution euler"]
 	,legend=:topleft
 )
 
-# ╔═╡ 58ef167d-6ee8-4d53-a3cc-c70194b9600e
+# ╔═╡ 752864fe-2822-415d-a9ee-a3e808f28124
 md"""
-At this level, the largest difference between the richardson extrapolation and the time values is
-$(round((log2.(global_errors_richardson)-log2.(time_steps))[1],sig4)).
-
-This is why it doesn't show up in the graph excep on that end.
+Note that I took the $\log_2$ of the absolute value of the errors as they tended to be positive.
 """
 
 # ╔═╡ 5b43aba2-cfb3-4a39-9f12-a9ef58b47c3c
@@ -508,12 +479,141 @@ md"""
 ## PC-Exercise 8.2.1
 Use the 2nd Order truncated taylor method with equal length time steps $\Delta = 2^{-3}, \dots, 2^{-10}$
 to calculate approximations to the solution:
-$x(t)$
+
+$x(t)=\frac{2}{1+e^{-t^2}}$
+
 of the initial value problem
+
+$\frac{\partial x}{\partial t} = tx(2-x) ~~~~~~~~~ x(0)=1$ 
 
 over the interval $0\leq t \leq 0.5$
 Repeat the calculations using the 3rd order truncated taylor method.
 Plot $\log_2$ of the global discretiation errors against $\log_2 \Delta$.
+"""
+
+# ╔═╡ 0fbd8b0a-7101-4484-b8bd-0ea46befaeb6
+struct DifferentiatedNumericalBase <: NumericalBase
+	f::Function #known function
+	a::Dict{String, Function} #This contains functions representing the partial derivatives wrt time and space. Rows represent time and columns represent space. Thus A[2,2] is ȧ′
+	Δt::Float64 #timestep
+	sig::Significance #used for estimation precision
+end
+
+# ╔═╡ 38015486-ffb6-4d66-8144-266666294958
+begin
+	function truncated_taylor_2nd_order_step(dnb::DifferentiatedNumericalBase, z0, t)
+		z1 = z0 + 
+			dnb.a["a"](z0,t) * dnb.Δt + 
+			(
+				dnb.a["ȧ"](z0,t) + dnb.a["a′"](z0,t) * dnb.a["a"](z0,t)
+			)*(dnb.Δt^2)/2
+		return z1
+	end
+
+	
+	function truncated_taylor_3rd_order_step(dnb::DifferentiatedNumericalBase, z0, t)
+		z1 = truncated_taylor_2nd_order_step(dnb, z0, t) +
+				(
+					dnb.a["ȧ̇"](z0,t) + 
+					2*dnb.a["ȧ′"](z0,t) * dnb.a["a"](z0,t) +
+					dnb.a["a′′"](z0,t) * dnb.a["a"](z0,t)^2 +
+					dnb.a["ȧ"](z0,t) * dnb.a["a′"](z0,t) +
+					dnb.a["a′"](z0,t)^2 * dnb.a["a"](z0,t)
+				)*(dnb.Δt^3)/6
+		return z1
+	end
+end
+
+# ╔═╡ 59210a08-2bfb-4a3a-b268-8d4929ff5d7b
+function solve(
+	dnb::DifferentiatedNumericalBase
+	,z0::Float64
+	,time_start::Float64
+	,time_stop::Float64
+	,step_algorithm::Function
+)
+	#=
+	This is generic across taylor algorithms (assuming dnb.a has enough dimensions/derivatives)
+	=#
+	
+	iterations = Int(ceil((time_stop-time_start)/dnb.Δt))
+
+	Z = zeros(iterations)
+
+	Z[1] = z0
+	t = time_start
+	
+	for i in 2:iterations
+		Z[i] = step_algorithm(dnb,Z[i-1],t)
+		t=+ dnb.Δt
+	end
+
+	return Z
+end
+
+# ╔═╡ 13b340e5-2eec-474e-9d5d-1493bbaee1a3
+begin
+	#get the list of derivatives that are required as functions
+	f(x,t)=2/(1+exp(-t^2))
+	f(t)=f(nothing,t)
+	a(x,t) = t*x*(2-x)
+
+	#time partials
+	ȧ(x,t) = x*(2-x)
+	ȧ̇(x,t) = 0
+	
+	#space partials
+	a′(x,t) = t*(2-2x)
+	a′′(x,t) = -2*t
+
+	#mixed partials
+	ȧ′(x,t) = 2 - 2x
+
+	A = Dict(
+		"a" => a
+		,"ȧ" => ȧ
+		,"ȧ̇" => ȧ̇
+		,"a′" => a′
+		,"a′′" => a′′
+		,"ȧ′" => ȧ′
+	)
+
+end
+
+# ╔═╡ 96889dbd-2306-40ff-bf40-34025c140f38
+begin
+	#setup deltas
+	deltas_821 = [2.0^-x for x in 3:10]
+	#setup numerical bases
+
+	bases_821 = [DifferentiatedNumericalBase(f,A,x,mcl) for x in deltas_821]
+
+	#setup error vectors
+	global_errors_821a = zero(deltas_821)
+	global_errors_821b = zero(deltas_821)
+
+	#get the actual result
+	actual_result_821 = f(nothing,0.5)
+	
+	for (i,base) in enumerate(bases_821)
+		z = solve(base,1.0,0.0,0.5,truncated_taylor_2nd_order_step)
+		global_errors_821a[i] = actual_result_821 - last(z)
+
+		zz = solve(base,1.0,0.0,0.5,truncated_taylor_3rd_order_step)
+		global_errors_821b[i] = actual_result_821 - last(zz)
+	end
+end
+
+# ╔═╡ eae6db4d-8cab-4876-94aa-0fa4f806a4b9
+plot(log2.(deltas_821)
+    ,[log2.(deltas_821) log2.(abs.(global_errors_821a)) log2.(abs.(global_errors_821b)) ]
+    ,labels = ["Δt" "2nd order taylor" "3rd order taylor"]
+	,legend=:topleft
+)
+
+# ╔═╡ 98e693de-d244-4f56-8c43-bc5169948dd9
+md"""
+Honestly, I'm not sure what mistake I made here. It *should* work, but something is off. I suspect it is part of the 2nd order system, but I honestly don't know.
 """
 
 # ╔═╡ 7ba7f265-92ec-44b7-bba4-3a3930cda6d4
@@ -522,9 +622,151 @@ md"""
 Repeat PC-Exercise 8.2.1 using the 4th order Runge-Kutta method with equal length time steps $\Delta = 2^{-3}, \dots, 2^{-7}$
 """
 
+# ╔═╡ 45d55719-da29-4f95-9817-e2e531aa5b7b
+function RK4_step(nb::NumericalBase,z,t)
+	k₁ = nb.a(z,t)
+	k₂ = nb.a(z + nb.Δt * k₁/2, t + nb.Δt/2)
+	k₃ = nb.a(z + nb.Δt * k₂/2, t + nb.Δt/2)
+	k₄ = nb.a(z + nb.Δt * k₃, t + nb.Δt)
+	
+	
+	zₙ₊₁ = z + nb.Δt * (k₁ + 2*k₂ + 2*k₃ + k₄)/6
+
+	return zₙ₊₁
+end
+
+# ╔═╡ 775166f6-f4ee-489b-9ef8-fbae8ec867df
+function RK4(
+	nb::NumericalBase
+	,z0
+	,start_time
+	,stop_time
+)
+	iterations = Int(ceil((stop_time-start_time)/nb.Δt))
+
+	Z = zeros(iterations)
+	Z[1] = z0
+	t = start_time
+	
+	for i in 2:iterations
+		Z[i] = RK4_step(nb,Z[i-1],t)
+		t=+nb.Δt
+	end
+
+	return Z
+end
+
+# ╔═╡ 85a36dcf-cf8e-4bcb-bc61-d6b424df0a15
+#just comparing methods
+RK4(bases_813[13],1.0,0.0,1.0) .- euler_method(bases_813[13],1.0,0.0,1.0)
+
+# ╔═╡ a391166d-ab73-4519-935d-dcaf4a1d2ee4
+bases_822 = [ExtendedNumericalBase(f,a,x,mcl) for x in deltas_821]
+
+# ╔═╡ 73f15bfd-9397-4558-82ac-591bc58ffbf8
+begin
+
+	#setup error vectors
+	global_errors_822 = zero(deltas_821)
+	euler_error_822 = zero(deltas_821)
+
+	#get the actual result
+	actual_result_822 = f(nothing,0.5)
+	
+	for (i,base) in enumerate(bases_822)
+		z = RK4(base,1.0,0.0,0.5)
+		global_errors_822[i] = actual_result_822 - last(z)
+
+		euler_error_822[i] = actual_result_822 - last(euler_method(base,1.0,0.0,0.5))
+
+	end
+end
+
+# ╔═╡ b5e44e8d-5733-409b-b1cf-b4e10a174665
+RK4(bases_822[8],1.0,0.0,0.5) .- euler_method(bases_822[8],1.0,0.0,0.5)
+
+# ╔═╡ 37cfee15-12e9-41c1-a9a7-b813d7d0d6a8
+log2.(euler_error_822)
+
+# ╔═╡ 1a6db083-dc19-4ee8-83b8-25bbda2080bd
+plot(log2.(deltas_821)
+    ,[log2.(deltas_821) log2.(abs.(global_errors_822)) log2.(euler_error_822) ]
+    ,labels = ["Δt" "RK4 global error" "euler error (for comparison)"]
+	,legend=:topleft
+)
+
+# ╔═╡ 1e9c7f61-c7fc-428e-9c6b-cbc6a4819dc5
+md"""
+As you can see, there is some issue with my RK4 and taylor implementation, as the euler method performs significantly better. 
+I have not been able to track down what is going on.
+"""
+
+# ╔═╡ 5d091b28-e5d3-4d38-a625-f3cb92b65fe8
+plot([RK4(bases_822[8],1.0,0.0,0.5) euler_method(bases_822[8],1.0,0.0,0.5) ])
+
+# ╔═╡ 2d37049d-0174-4a69-9ecb-1d4d233dfecb
+plot([f(t) for t in 0.0:deltas_821[8]:0.5])
+
 # ╔═╡ 9fb405a3-61dd-4342-bc71-766faab0c089
 md"""
 ## PC-Exercise 8.2.3
+"""
+
+# ╔═╡ f2e1b3f7-a6c5-4426-bd55-188bb31e2a66
+begin
+	function midpoint_step(nb::NumericalBase,z0,z1,t)
+		return z0 + 2*nb.a(z1,t) * nb.Δt
+	end
+	
+	function midpoint_method(nb::NumericalBase,z0,start_time,stop_time)
+		iterations = Int(ceil((stop_time-start_time)/nb.Δt))
+	
+		Z = zeros(iterations)
+		Y = zeros(iterations)
+		X = zeros(iterations)
+		
+		Z[1] = z0
+		Y[1] = z0
+		X[1] = z0
+		t = start_time
+		
+		#starting step
+		Z[2] = euler_step(nb,Z[1],t)
+		X[2] = Z[2]
+	
+		
+		for i in 3:iterations
+			Z[i] = midpoint_step(nb,Z[i-2],Z[i-1],t)
+			Y[i] = nb.f(t)
+			X[i] = midpoint_step(nb,Y[i-2],Y[i-1],t)
+			
+			t=+nb.Δt
+		end
+	
+		return Z,Y,X
+	end
+end
+
+# ╔═╡ 5e4e3b67-4354-4454-ac31-6b231802457b
+#problem setup
+nb_823 = ExtendedNumericalBase(
+	t -> 2/3 * exp(-3*t) + 1/3
+	,(x,t) -> -3*x + 1
+	,0.1
+	,mcl)
+
+# ╔═╡ aa37da4d-565c-47d7-8d3a-e4fc482d063d
+mid_results, actual1, mid_error = midpoint_method(nb_823,1.0,0.0,1.0)
+
+# ╔═╡ 7060af6b-ca10-4d58-9b77-0f82459fcefd
+eul_results, actual2, eul_error = euler_method_with_local_errors(nb_823,1.0,0.0,1.0)
+
+# ╔═╡ 6ca93e0d-a862-4e7e-a4aa-a829776404a5
+plot([mid_results eul_results])
+
+# ╔═╡ e2e1cbc9-d0ab-4893-8e0a-c9c7eb095e01
+md"""
+There is quite a difference between the two, particularly in the nature of convergence.
 """
 
 # ╔═╡ e341c000-6243-45e6-9592-51646c300bff
@@ -557,7 +799,11 @@ begin
 end
 
 # ╔═╡ a886c490-7710-4bbd-afbf-68c770266413
-(mean(rounding_errors),std(rounding_errors))
+md"""
+Mean: $(mean(rounding_errors))
+
+Stdev: $(std(rounding_errors))
+"""
 
 # ╔═╡ 58178a7d-4f2b-4239-a8e2-cea744c9c415
 histogram(rounding_errors,bins=40)
@@ -580,7 +826,7 @@ In addition, calculate the sample mean and sample variance.
 # ╔═╡ d06c65e6-5921-4966-8ab6-d3bf54413218
 begin
 	#record the known solution and get the differential version.
-	f8_4_2(x,t) = exp(x);
+	f8_4_2(x) = exp(x);
 	f8_4_2′(x,t) = x;
 	
 	N8_4_2 = 1000
@@ -598,17 +844,17 @@ function record8_4(nb::NumericalBase,x0,N)
         R[i] = yi - round(yi, sig4)
     end
     
-    return R,mean(R),std(R)
+    return R
 end
 
 # ╔═╡ 894ebec6-5640-4b61-b3c0-f28e1a9da1a2
-err_x,mean_x,std_x = record8_4(nb8_4_2,x0,N8_4_2)
+err_x = record8_4(nb8_4_2,x0,N8_4_2)
 
 # ╔═╡ f7e1b876-e329-42da-afab-ce8cb8d2a130
 md"""
-Mean:  $mean_x
+Mean:  $(mean(err_x))
 
-stdev: $std_x
+stdev: $(std(err_x))
 """
 
 # ╔═╡ 9b29cefd-0176-4e7f-b921-56398f53a7d0
@@ -623,77 +869,81 @@ Repeat PC-Exercise 8.4.2 with N = 200 and with equal length time steps $\Delta =
 
 # ╔═╡ 65a9af69-fb9b-4a9b-b1ab-885f5339c43e
 begin
-	nb8_4_3_a = FundamentalNumericalBase(f8_4_2,2^-3,MachineLevel());
-	nb8_4_3_b = FundamentalNumericalBase(f8_4_2,2^-4,MachineLevel());
-	nb8_4_3_c = FundamentalNumericalBase(f8_4_2,2^-5,MachineLevel());
-end
+	nb8_4_3 = [
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-2,mcl),
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-3,mcl),
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-4,mcl),
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-5,mcl)]
 
-# ╔═╡ 42e7b5bf-ebb7-4779-a0ad-9aab27e70b42
-err_a,mean_a,std_a = record8_4(nb8_4_3_a,x0,200);
+	rnb8_4_3 = [
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-2,sig4),
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-3,sig4),
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-4,sig4),
+		ExtendedNumericalBase(f8_4_2,f8_4_2′,2^-5,sig4)
+	]
+end;
 
-# ╔═╡ e80da6f2-13fc-4d88-a4e5-1aa64e720323
-md"""
-Mean: $mean_a
+# ╔═╡ c3f8aaab-22ed-445d-9f8d-07e7e44bb3d4
+X = 0.4 .+ 0.2.*rand(200)
 
-Stdev: $std_a
-"""
+# ╔═╡ 70d14706-4de7-4f29-883b-4709fa6ae6de
+x=0.5
 
-# ╔═╡ 9326342b-2f6e-4a5e-943a-5ab1e2ed7683
-histogram(err_a)
+# ╔═╡ 0bd4b413-4fb4-40d6-8227-d31ef346ebcf
+euler_method_with_local_errors(nb8_4_3[1],X[3],0.0,1.0)
 
-# ╔═╡ 13754540-2ad1-4207-a871-bc1d3ee4304f
-err_b,mean_b,std_b = record8_4(nb8_4_3_b,x0,200); #FIX: Here
-
-# ╔═╡ 52ccee1d-e280-44f8-b5e7-15561976e942
-md"""
-Mean: $mean_b
-
-Stdev: $std_b
-"""
-
-# ╔═╡ e6f1dff1-136e-41fa-8a4a-0afd07ac5b27
-histogram(err_b)
-
-# ╔═╡ ecdc5fb4-ce14-4397-98c6-643ed6d599e6
-err_c,mean_c,std_c = record8_4(nb8_4_3_c,x0,200);
-
-# ╔═╡ 05acc023-c10e-4ec4-8a8b-eb58f729979b
-md"""
-Mean: $mean_c
-
-Stdev: $std_c
-"""
-
-# ╔═╡ 099242cf-00b5-4e48-8da1-f19a19820565
-histogram(err_c)
-
-# ╔═╡ 2b174e9e-fc0b-4595-9449-7994a4e0f337
+# ╔═╡ 629d4be7-5f7b-4e19-9ebb-3379dc4f05c0
 begin
-	v = [-1 1]
-	#90% confidence intervals #TODO
-	bounds_a = 1.65*std_a *v .+ mean_a;
-	bounds_b = 1.65*std_b *v .+ mean_b;
-	bounds_c = 1.65*std_c *v .+ mean_c;
+	d = Dict()
+	for (n,r) in zip(nb8_4_3,rnb8_4_3)
+		roundoff_error = []
+		for x in X
+			n1,n2,n3 = euler_method_with_local_errors(n,x,0.0,1.0)
+			r1,r2,r3 = euler_method_with_local_errors(r,x,0.0,1.0)
+	
+			append!(roundoff_error, n3-r3) #todo: Calculate roundoff error
+		end
+	
+		#process roundoff error
+		d[n.Δt] = roundoff_error
+	end
+
 end
 
-# ╔═╡ 6c64f6d8-f1fc-4d8e-a758-35b404c63e4f
+# ╔═╡ 412c196c-f3a7-49f5-af49-bf3eff226184
+begin
+	top = []
+	bottom = []
+	delts = [2.0^(-2) 2.0^(-3) 2.0^(-4) 2.0^(-5)]
+	for s in delts
+		bott,tops = quantile(d[s],[0.05,0.95])
+		append!(top,tops)
+		append!(bottom,bott)
+	end
+end
+
+# ╔═╡ 35f239b0-8581-4917-9f7a-5895ac055cb4
+bottom,top
+
+# ╔═╡ bc1455a5-e844-4e10-b71d-125375323f76
+plot([top bottom],label=["95% quantile" "5% quantile"], type=:line)
+
+# ╔═╡ 5bba4c9f-210d-4897-840a-281df5e87614
 md"""
-$(println(bounds_a))
-
-$(println(bounds_b))
-
-$(println(bounds_c))
+each integer point above represents a single step along $delts.
+It turns out the effect of roundoff error grows as you take more steps, i.e. round more often.
 """
-#Todo, figure out how to plot the bounds
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
+ForwardDiff = "~0.10.24"
 Plots = "~1.23.2"
 """
 
@@ -752,6 +1002,12 @@ git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.8"
 
+[[CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "dce3e3fea680869eaa0b774b2e8343e9ff442313"
@@ -791,6 +1047,18 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 [[DelimitedFiles]]
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+
+[[DiffResults]]
+deps = ["StaticArrays"]
+git-tree-sha1 = "c18e98cba888c6c25d1c3b048e4b3380ca956805"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.0.3"
+
+[[DiffRules]]
+deps = ["LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "9bc5dac3c8b6706b58ad5ce24cffd9861f07c94f"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.9.0"
 
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -847,6 +1115,12 @@ deps = ["Printf"]
 git-tree-sha1 = "8339d61043228fdd3eb658d86c926cb282ae72a8"
 uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
 version = "0.4.2"
+
+[[ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions", "StaticArrays"]
+git-tree-sha1 = "2b72a5624e289ee18256111657663721d59c143e"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.24"
 
 [[FreeType2_jll]]
 deps = ["Artifacts", "Bzip2_jll", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -1126,11 +1400,21 @@ version = "1.3.5+0"
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 
+[[OpenLibm_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+
 [[OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "15003dcb7d8db3c6c857fda14891a539a8f2705a"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 version = "1.1.10+0"
+
+[[OpenSpecFun_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
+uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
+version = "0.5.5+0"
 
 [[Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1263,6 +1547,12 @@ version = "1.0.1"
 [[SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[[SpecialFunctions]]
+deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
+git-tree-sha1 = "e08890d19787ec25029113e88c34ec20cac1c91e"
+uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
+version = "2.0.0"
 
 [[StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
@@ -1568,43 +1858,60 @@ version = "0.9.1+5"
 # ╠═4ae88583-3fcf-4737-8505-cc0e444aa948
 # ╠═4eb6000e-8f62-45ac-a1ab-e4ad16e3bc72
 # ╠═e0fef77e-8a9c-4f13-ae63-331aa952a29d
-# ╠═0c2b9c41-84e6-4575-a954-f05c9fb002d3
+# ╠═85a36dcf-cf8e-4bcb-bc61-d6b424df0a15
 # ╠═8436ab86-bc96-40bd-8939-5270b964b5a8
 # ╟─f8433ea7-1a67-4dae-819e-ae839df1798e
 # ╠═cefd8f6b-188e-440b-ac4b-6ba7a987f6fb
 # ╠═58593717-bdbd-47a0-83c1-ee0f79802e7e
 # ╠═d0271b52-fcd7-4fa2-a7bd-7228fa169857
-# ╠═8df5b4cf-0c79-45c4-a42c-63fa63d31df0
-# ╠═93b452b6-f800-4a73-9bab-4b861bcad181
-# ╠═6a5d536b-a549-4a51-8297-50e5f7ca385e
 # ╠═9bbdabec-0444-4e0f-8f51-f1669a9e661b
-# ╟─58ef167d-6ee8-4d53-a3cc-c70194b9600e
-# ╠═5b43aba2-cfb3-4a39-9f12-a9ef58b47c3c
+# ╟─752864fe-2822-415d-a9ee-a3e808f28124
+# ╟─5b43aba2-cfb3-4a39-9f12-a9ef58b47c3c
+# ╠═0fbd8b0a-7101-4484-b8bd-0ea46befaeb6
+# ╠═38015486-ffb6-4d66-8144-266666294958
+# ╠═59210a08-2bfb-4a3a-b268-8d4929ff5d7b
+# ╠═13b340e5-2eec-474e-9d5d-1493bbaee1a3
+# ╠═96889dbd-2306-40ff-bf40-34025c140f38
+# ╠═eae6db4d-8cab-4876-94aa-0fa4f806a4b9
+# ╠═98e693de-d244-4f56-8c43-bc5169948dd9
 # ╠═7ba7f265-92ec-44b7-bba4-3a3930cda6d4
+# ╠═45d55719-da29-4f95-9817-e2e531aa5b7b
+# ╠═775166f6-f4ee-489b-9ef8-fbae8ec867df
+# ╠═a391166d-ab73-4519-935d-dcaf4a1d2ee4
+# ╠═73f15bfd-9397-4558-82ac-591bc58ffbf8
+# ╠═b5e44e8d-5733-409b-b1cf-b4e10a174665
+# ╠═37cfee15-12e9-41c1-a9a7-b813d7d0d6a8
+# ╠═1a6db083-dc19-4ee8-83b8-25bbda2080bd
+# ╟─1e9c7f61-c7fc-428e-9c6b-cbc6a4819dc5
+# ╠═5d091b28-e5d3-4d38-a625-f3cb92b65fe8
+# ╠═2d37049d-0174-4a69-9ecb-1d4d233dfecb
 # ╠═9fb405a3-61dd-4342-bc71-766faab0c089
+# ╠═f2e1b3f7-a6c5-4426-bd55-188bb31e2a66
+# ╠═5e4e3b67-4354-4454-ac31-6b231802457b
+# ╠═aa37da4d-565c-47d7-8d3a-e4fc482d063d
+# ╠═7060af6b-ca10-4d58-9b77-0f82459fcefd
+# ╠═6ca93e0d-a862-4e7e-a4aa-a829776404a5
+# ╟─e2e1cbc9-d0ab-4893-8e0a-c9c7eb095e01
 # ╠═e341c000-6243-45e6-9592-51646c300bff
 # ╠═1e7feaa4-18f5-438d-92e4-5a6760370bfc
 # ╠═a0efd6fd-4dc6-4728-9275-9f421a2a3ca2
-# ╠═a886c490-7710-4bbd-afbf-68c770266413
+# ╟─a886c490-7710-4bbd-afbf-68c770266413
 # ╠═58178a7d-4f2b-4239-a8e2-cea744c9c415
 # ╟─eb845364-f78b-448f-9d0e-6db8d6bee4ba
 # ╠═d06c65e6-5921-4966-8ab6-d3bf54413218
 # ╠═53f8b28a-4c72-4215-b2d9-76551fd64dfe
 # ╠═894ebec6-5640-4b61-b3c0-f28e1a9da1a2
-# ╟─f7e1b876-e329-42da-afab-ce8cb8d2a130
+# ╠═f7e1b876-e329-42da-afab-ce8cb8d2a130
 # ╠═9b29cefd-0176-4e7f-b921-56398f53a7d0
 # ╟─f2aabd6c-b8f7-459b-8daf-d01ad60cfbbd
 # ╠═65a9af69-fb9b-4a9b-b1ab-885f5339c43e
-# ╠═42e7b5bf-ebb7-4779-a0ad-9aab27e70b42
-# ╠═e80da6f2-13fc-4d88-a4e5-1aa64e720323
-# ╠═9326342b-2f6e-4a5e-943a-5ab1e2ed7683
-# ╠═13754540-2ad1-4207-a871-bc1d3ee4304f
-# ╠═52ccee1d-e280-44f8-b5e7-15561976e942
-# ╠═e6f1dff1-136e-41fa-8a4a-0afd07ac5b27
-# ╠═ecdc5fb4-ce14-4397-98c6-643ed6d599e6
-# ╠═05acc023-c10e-4ec4-8a8b-eb58f729979b
-# ╠═099242cf-00b5-4e48-8da1-f19a19820565
-# ╠═2b174e9e-fc0b-4595-9449-7994a4e0f337
-# ╠═6c64f6d8-f1fc-4d8e-a758-35b404c63e4f
+# ╠═c3f8aaab-22ed-445d-9f8d-07e7e44bb3d4
+# ╠═70d14706-4de7-4f29-883b-4709fa6ae6de
+# ╠═0bd4b413-4fb4-40d6-8227-d31ef346ebcf
+# ╠═629d4be7-5f7b-4e19-9ebb-3379dc4f05c0
+# ╠═412c196c-f3a7-49f5-af49-bf3eff226184
+# ╠═35f239b0-8581-4917-9f7a-5895ac055cb4
+# ╠═bc1455a5-e844-4e10-b71d-125375323f76
+# ╠═5bba4c9f-210d-4897-840a-281df5e87614
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
