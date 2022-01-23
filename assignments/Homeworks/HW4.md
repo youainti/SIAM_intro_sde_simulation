@@ -29,11 +29,7 @@ $m(s) = b + e^{ds}$, thus $m^\prime(s) = d e^{ds}$
 
 If that is true, then
 
-$d e^{ds} =  a_1(b + e^{ds}) + a_2$  and $m_0 = b + 1$
 
-$de^{ds} = a_1 e^{ds} + a_1(m_0 -1) + a_2$
-
-**FINISH SOLVING ODE**
 
 
 # Problem 6.4
