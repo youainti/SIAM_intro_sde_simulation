@@ -20,37 +20,65 @@ $m_t - m_0 = \int^t_0 a_1 m_s + a_2 ds$
 
 Which in differential form is the initial value problem
 
-$\frac{d m_s}{ds} = a_1 m_s + a_2$        $m_0 = E(X_0)$
+$\frac{d m_s}{ds} = a_1 m_s + a_2$    
+with initial condition
+$m_0 = E(X_0)$
 
-I am terrible at solving ODE's but using guess and check (based on the general form given in the book),
-the solution takes the form 
+I am terrible at solving ODE's, but Referencing Lessons 11A and 11B on integrating factors from Tenenbaum and Pollard's ODE's 
+I get:
 
-$m(s) = b + e^{ds}$, thus $m^\prime(s) = d e^{ds}$
+$$
+\frac{\partial m_t}{\partial t} -a_1 m_t =a_2
+$$
 
-If that is true, then
+With integrating factor $e^{-a_1 t}$ we get 
 
+$$
+m_t = \frac{-a_2}{a_1}\left(1 - e^{a_1 t} \right) + m_0 e^{a_1 t}
+$$
 
-
-
+an equivalent formulation of the solution.
 # Problem 6.4
+Given the SDE $dX_t = \lambda (\mu -X_t) dt + \sigma dW_t$  we get coefficients $a_1=-\lambda, a_2 = \lambda \mu$ matching exercise 5.2.
 
+Let $Y_t = \phi(X_t, t) = X_t - m_t$. 
+Thus as $\phi_t = d m_t, \phi_x = 1, \phi_{xx} = 0$ we get $dY_t = dX_t - dm_t$.
 
+Thus as $dm_t = \lambda(\mu - m_t)dt$  from 5.2, it must be that
 
+$$
+dY_t = \lambda (\mu -X_t) dt + \sigma dW_t -  \lambda(\mu - m_t)dt \\
+dY_t = -\lambda (X_t-m_t) dt + \sigma dW_t \\
+dY_t = -\lambda (Y_t) dt + \sigma dW_t \\
+$$
+This is known to have the solution
+
+$$
+Y_t = \sigma e^{-\lambda t} \int_0^t e^{\lambda s} dW_s
+$$
+
+By transformation then,
+$$
+X_t =\sigma e^{-\lambda t} \int_0^t e^{\lambda s} dW_s + m_t \\
+X_t =\sigma e^{-\lambda t} \int_0^t e^{\lambda s} dW_s + \mu(1-e^{-\lambda t}) + m_0e^{-\lambda t}\\
+$$
+As $m_0 = x_0$ this result is equivalent to the result in the book.
 # Problem 6.5
 
 Consider the SDE
 
 $dS_t = dW_t$, i.e. $S_t = W_t$
 
-Then for $Y_t(x) = \phi(x,t) = \frac{1}{1-x}$ by the ito formula, we get that
+Then for $Y_t = \phi(x,t) = \frac{1}{1-x}$ by the ito formula, we get that
 
 $dY_t = 0 dt + \phi_x(S_t,t) dS_t + \frac{1}{2} 1^2 \phi_{xx}(S_t,t) dt$
 
 Thus as $\phi_x = (1-x)^{-2}$ and $\phi_{xx}= 2(1-x)^{-3}$ we get 
 
 
-$dY_t = (1-S_t)^{-2}dS_t + \frac{2}{2}(1-S_t)^{-3} dt$
+$dY_t = (1-S_t)^{-2}dS_t + \frac{2}{2}(1-S_t)^{-3} dt = Y_t^2 dW_t + Y_t^3 dt$
 
+Thus $Y_t = \frac{1}{1-W_t}$ solves the differential equation above. 
 # Problem 7.1
 ## Expectation
 Prove
