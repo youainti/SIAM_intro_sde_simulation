@@ -38,6 +38,9 @@ m_t = \frac{-a_2}{a_1}\left(1 - e^{a_1 t} \right) + m_0 e^{a_1 t}
 $$
 
 an equivalent formulation of the solution.
+
+
+
 # Problem 6.4
 Given the SDE $dX_t = \lambda (\mu -X_t) dt + \sigma dW_t$  we get coefficients $a_1=-\lambda, a_2 = \lambda \mu$ matching exercise 5.2.
 
@@ -63,6 +66,8 @@ X_t =\sigma e^{-\lambda t} \int_0^t e^{\lambda s} dW_s + m_t \\
 X_t =\sigma e^{-\lambda t} \int_0^t e^{\lambda s} dW_s + \mu(1-e^{-\lambda t}) + m_0e^{-\lambda t}\\
 $$
 As $m_0 = x_0$ this result is equivalent to the result in the book.
+
+
 # Problem 6.5
 
 Consider the SDE
@@ -79,6 +84,9 @@ Thus as $\phi_x = (1-x)^{-2}$ and $\phi_{xx}= 2(1-x)^{-3}$ we get
 $dY_t = (1-S_t)^{-2}dS_t + \frac{2}{2}(1-S_t)^{-3} dt = Y_t^2 dW_t + Y_t^3 dt$
 
 Thus $Y_t = \frac{1}{1-W_t}$ solves the differential equation above. 
+
+
+
 # Problem 7.1
 ## Expectation
 Prove
@@ -115,6 +123,43 @@ $C = 0.25  \sum_i q(W_{t_i})  \sum_j q(W_{t_j}) \delta t^2$
 
 
 # Problem 7.7 
-# Problem PC 7.1
-# Problem PC 7.2
+
+Given an Ito SDE 
+$$
+dX_t = rX_t dt + \gamma X_t dW_t
+$$
+and corresponding Stratonovich SDE
+$$
+d\hat X_t = r \hat X_t dt + \gamma \hat X_t \circ dW_t
+$$
+we note that by equation 7.9, there is an ito SDE equivalent to the stratonovich SDE
+written as
+$$
+d\bar X_t = \left( r - \frac{\gamma^2}{2}\right) \bar X_t dt + \gamma \bar X_t dW_t
+$$
+Giving the key relationship that for any function $F(\cdot)$, it mus t be that $F(\hat x) = F(\bar x)$
+
+From the discussion surrounding 5.6, we know that 
+$$
+E(X_t) = E(X_0) e^{rt}
+$$
+Thus from the discussion above
+$$
+E(\hat X_t) = E(\bar X_t) = E(\hat X_0) e^{t(r-\frac{\gamma^2}{2})}
+$$
+
+Similarly, as Exercise 6.3 gives us that
+$$
+E(\log X_t) = \log X_0 + t(r-\frac{\gamma^2}{2})
+$$
+Thus by subsitution
+$$
+E(\log \hat X_t) = E(\log \bar X_t) = \log \hat X_0 
+    + {t(r-\frac{\gamma^2}{2})} - t\frac{\gamma^2}{2} \\
+E(\log \hat X_t) = E(\log \bar X_t) = \log \hat X_0 + tr
+$$
+
+# Problem PC 7.1 and Problem PC 7.2
+
+See Submitted julia files.
 
