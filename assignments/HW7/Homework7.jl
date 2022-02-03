@@ -12,7 +12,7 @@ begin
 		Δt::Float64
 		t0::Float64
 	end
-	Base.getindex(wp::StochasticPath,i::Int) = wp.path[i]
+	Base.getindex(wp::StochasticPath, i::Int) = wp.path[i]
 	Base.length(wp::StochasticPath) = length(wp.path)
 	Base.lastindex(p::StochasticPath) = lastindex(p.path)
 end

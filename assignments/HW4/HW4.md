@@ -96,7 +96,13 @@ Note that due to independence of $q(W_{t_i})$ and $(W_{t_{i+0.5}} - W_{t_i})$
 
 $\sum E\left[ q(W_{t_i})\right]  E\left[ (W_{t_{i+0.5}} - W_{t_i}) ^2\right]  - 0.5  \delta t E\left[ \sum q(W_{t_i})  \right]$
 
-And note that $(W_{t_{i+0.5}} - W_{t_i}) \sim N(0,\frac{1}{\sqrt 2} \delta t)$, thus
+And note that 
+
+$$
+(W_{t_{i+0.5}} - W_{t_i}) \sim N(0,\frac{1}{\sqrt 2} \delta t)
+$$
+
+thus
 
 $\sum E\left[ q(W_{t_i})\right] 0.5 \delta t  - 0.5  \delta t E\left[ \sum q(W_{t_i})  \right] = 0$
 
@@ -120,7 +126,7 @@ $B = -2 \sum_i q(W_{t_i})(W_{t_{i+0.5}} - W_{t_i}) ^2   \times 0.5  \sum_j q(W_{
 $C = 0.25  \sum_i q(W_{t_i})  \sum_j q(W_{t_j}) \delta t^2$
 
 
-
+I realized I stopped this problem halfway through.
 
 # Problem 7.7 
 
@@ -161,5 +167,7 @@ $$
 
 # Problem PC 7.1 and Problem PC 7.2
 
-See Submitted julia files.
+See Submitted julia notebooks, html results, and pdf. 
+They all say the same thing, but are different formats.
+I suggest reading the HTML.
 
